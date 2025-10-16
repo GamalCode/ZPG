@@ -1,4 +1,4 @@
-﻿#include "Application.h"
+#include "Application.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "Transform.h"
@@ -27,6 +27,7 @@ Application::~Application() {
 
     if (camera) delete camera;
     if (controller) delete controller;
+    if (mainLight) delete mainLight;
 
     if (mainWindow) {
         glfwDestroyWindow(mainWindow);
@@ -85,10 +86,12 @@ void Application::initialization() {
 
     lastFrameTime = glfwGetTime();
 
+    mainLight = new Light(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f));
+
     printf("Camera initialized\n");
     printf("Camera initialized\n");
     printf("Controls: WSAD = movement, Right Mouse Button + Move = look around\n");
-    printf("Keys 1-7: Switch scenes, F1-F4: Switch shaders\n");
+    printf("Keys 1-7: Switch scenes, F1-F4 a G: Switch shaders\n");
 }
 
 void Application::createShaders() {
@@ -96,6 +99,7 @@ void Application::createShaders() {
     ShaderProgram* constantShader = new ShaderProgram();
     ShaderProgram* lambertShader = new ShaderProgram();
     ShaderProgram* phongShader = new ShaderProgram();
+    ShaderProgram* blinnShader = new ShaderProgram();
 
     // F1: PŮVODNÍ SHADER
     const char* original_vertex_shader =
@@ -237,6 +241,51 @@ void Application::createShaders() {
     }
     phongShader->setCamera(camera);
     addShader(phongShader);
+
+    // F6: BLINN-PHONG SHADER
+    if (!blinnShader->loadShaderFromFiles("phong.vert", "blinn.frag")) {
+        printf("Loading Blinn-Phong shader from files failed\n");
+        const char* vertex_shader =
+            "#version 330 core\n"
+            "layout(location=0) in vec3 vp;"
+            "layout(location=1) in vec3 vn;"
+            "uniform mat4 modelMatrix;"
+            "uniform mat4 viewMatrix;"
+            "uniform mat4 projectionMatrix;"
+            "out vec3 worldPosition;"
+            "out vec3 worldNormal;"
+            "void main() {"
+            "    vec4 wp = modelMatrix * vec4(vp, 1.0);"
+            "    worldPosition = wp.xyz;"
+            "    worldNormal = mat3(transpose(inverse(modelMatrix))) * vn;"
+            "    gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(vp, 1.0);"
+            "}";
+
+        const char* fragment_shader =
+            "#version 330\n"
+            "in vec3 worldPosition;"
+            "in vec3 worldNormal;"
+            "uniform vec3 lightPosition;"
+            "uniform vec3 cameraPosition;"
+            "out vec4 fragColor;"
+            "void main() {"
+            "    vec4 objectColor = vec4(0.385, 0.647, 0.812, 1.0);"
+            "    vec4 ambient = vec4(0.1, 0.1, 0.1, 1.0);"
+            "    vec3 norm = normalize(worldNormal);"
+            "    vec3 lightDir = normalize(lightPosition - worldPosition);"
+            "    float diff = max(dot(norm, lightDir), 0.0);"
+            "    vec4 diffuse = diff * objectColor;"
+            "    vec3 viewDir = normalize(cameraPosition - worldPosition);"
+            "    vec3 halfDir = normalize(lightDir + viewDir);"
+            "    float spec = pow(max(dot(norm, halfDir), 0.0), 32.0);"
+            "    vec4 specular = spec * vec4(1.0, 1.0, 1.0, 1.0);"
+            "    fragColor = ambient + diffuse + specular;"
+            "}";
+
+        blinnShader->loadMainShader(vertex_shader, fragment_shader);
+    }
+    blinnShader->setCamera(camera);
+    addShader(blinnShader);
 }
 
 void Application::setupCamera() {
@@ -588,6 +637,12 @@ void Application::createScenes() {
 
     Scene* testScene1 = new Scene("Test Scene 1 - Four Spheres");
 
+    // Přidaní malé žluté koule uprostřed pro světlo
+    Transform* lightVis = new Transform();
+    lightVis->addTransform(new Scale(0.1f));
+    DrawableObject* lightSphere = new DrawableObject(modelList[6], shaderPrograms[0], lightVis);
+    testScene1->addObject(lightSphere);
+
     glm::vec3 testSpherePositions[] = {
         glm::vec3(-0.7f, 0.0f, 0.0f),   // levá
         glm::vec3(0.7f, 0.0f, 0.0f),    // pravá  
@@ -695,7 +750,7 @@ void Application::switchShader(int shaderIndex) {
             for (auto& drawable : currentScene->getObjects()) {
                 drawable->setShader(shaderPrograms[shaderIndex]);
             }
-            const char* shaderNames[] = { "Original Colors", "Constant", "Lambert", "Phong" };
+            const char* shaderNames[] = { "Original Colors", "Constant", "Lambert", "Phong", "Blinn"};
             printf("Switched to %s shader\n", shaderNames[shaderIndex]);
         }
     }
@@ -743,11 +798,12 @@ void Application::key_callback(GLFWwindow* window, int key, int scancode, int ac
             else if (key == GLFW_KEY_6) instance->switchScene(5);
             else if (key == GLFW_KEY_7) instance->switchScene(6);
             else if (key == GLFW_KEY_8) instance->switchScene(7);
-            // Přepínání shaderů pomocí F1-F4
+            // Přepínání shaderů pomocí F1-F4 a G
             else if (key == GLFW_KEY_F1) instance->switchShader(0);
             else if (key == GLFW_KEY_F2) instance->switchShader(1);
             else if (key == GLFW_KEY_F3) instance->switchShader(2);
             else if (key == GLFW_KEY_F4) instance->switchShader(3);
+            else if (key == GLFW_KEY_G) instance->switchShader(4);
         }
     }
 }
