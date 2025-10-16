@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <vector>
@@ -11,6 +11,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "Camera.h"
 #include "Controller.h"
+#include "Light.h"
 
 using namespace std;
 
@@ -26,6 +27,8 @@ private:
     Controller* controller;
     float deltaTime;
     double lastFrameTime;
+
+    Light* mainLight;
 
     // Callback Functions
     static void error_callback(int error, const char* description);
